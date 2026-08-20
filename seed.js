@@ -1,0 +1,2 @@
+window.SEED_TRANSACTIONS = [];
+window.SEED_CATEGORIES = ["Abbigliamento", "Abbonamenti", "ass.previdenziale", "assicurazione", "auto", "Bancarie", "bolletta", "carburante", "casa", "cura della persona", "finanziamento", "istruzione", "manutenzione", "mediche", "PAGA", "PD", "Prelievo", "Regali Natale", "regalo", "Rimborso", "ristorazione", "Saber", "spesa", "svago", "tasse", "trasporti", "vacanza", "varie", "VERSAMENTO"];

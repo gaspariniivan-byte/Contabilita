@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Contabilità Ivan</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<header><div><h1>Contabilità</h1><p>Archivio personale · local-first</p></div><button id="installBtn" hidden>Installa</button></header>
+<nav>
+<button data-view="home" class="active">Riepilogo</button>
+<button data-view="add">+ Spesa</button>
+<button data-view="transactions">Movimenti</button>
+<button data-view="analysis">Analisi</button>
+<button data-view="medical">Mediche</button>
+<button data-view="receipt">Scontrino</button>
+<button data-view="bank">Banca</button>
+<button data-view="settings">Backup</button>
+</nav>
+<main>
+<section id="home" class="view active">
+  <div class="filters"><select id="homeYear"></select><select id="homeMonth"><option value="">Tutto l'anno</option></select></div>
+  <div id="kpis" class="kpis"></div>
+  <div class="card"><h2>Spesa per categoria</h2><div id="topCats"></div></div>
+  <div class="card"><h2>Andamento mensile</h2><div id="monthlyBars"></div></div>
+</section>
+
+<section id="add" class="view">
+  <div class="card">
+  <div class="sectionTitle"><h2 id="formTitle">Nuovo movimento</h2><button id="cancelEdit" class="ghost" hidden>Annulla modifica</button></div>
+  <form id="txForm">
+    <input id="editId" type="hidden">
+    <label>Data<input id="date" type="date" required></label>
+    <label>Tipo<select id="kind"><option value="expense">Spesa</option><option value="income">Entrata</option></select></label>
+    <label>Categoria<select id="category" required></select></label>
+    <label>Importo (€)<input id="amount" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+    <label>Pagamento<select id="payment"><option value="account">Conto / carta</option><option value="cash">Contanti</option></select></label>
+    <label>Merceologico / descrizione<input id="description" type="text"></label>
+    <label>Ragione sociale / testo originale<input id="merchantRaw" type="text" placeholder="Come compare su scontrino/conto"></label>
+    <label>Esercente visualizzato<input id="merchant" type="text" placeholder="Es. Conad Aviano"></label>
+    <div class="row2"><label>Diesel €/l<input id="diesel" type="number" step="0.001"></label><label>Benzina €/l<input id="petrol" type="number" step="0.001"></label></div>
+    <label class="check"><input id="rememberAlias" type="checkbox" checked> Ricorda l'associazione ragione sociale → esercente</label>
+    <button class="primary" type="submit" id="saveBtn">Registra</button>
+  </form>
+  </div>
+</section>
+
+<section id="transactions" class="view">
+ <div class="card"><h2>Movimenti</h2>
+ <div class="filters"><input id="search" placeholder="Cerca..."><select id="txYear"></select><select id="txCategory"><option value="">Tutte le categorie</option></select></div>
+ <div id="txList"></div></div>
+</section>
+
+<section id="analysis" class="view">
+ <div class="card"><h2>Analisi / Pareto</h2>
+ <div class="filters"><select id="anYear"></select><select id="anMonth"><option value="">Tutto l'anno</option></select></div>
+ <div id="pareto"></div></div>
+</section>
+
+<section id="medical" class="view">
+ <div class="card"><h2>Spese mediche</h2>
+ <div class="filters"><select id="medYear"></select><button id="exportMedical">Esporta CSV</button></div>
+ <div id="medicalSummary"></div><div id="medicalList"></div></div>
+</section>
+
+<section id="receipt" class="view">
+ <div class="card"><h2>Acquisisci scontrino</h2>
+ <p class="muted">L'OCR non salva mai da solo. Legge lo scontrino, propone i campi e tu puoi correggerli prima di portarli nella maschera definitiva.</p>
+ <input id="receiptImage" type="file" accept="image/*" capture="environment">
+ <img id="receiptPreview" class="preview" hidden>
+ <button id="ocrBtn" class="primary" disabled>Leggi scontrino</button>
+ <div id="ocrStatus" class="muted"></div>
+ <textarea id="ocrText" rows="7" placeholder="Testo riconosciuto..."></textarea>
+ <div class="ocrGrid">
+   <label>Data proposta<input id="ocrDate" type="date"></label>
+   <label>Totale proposto (€)<input id="ocrAmount" type="number" step="0.01"></label>
+   <label>Ragione sociale rilevata<input id="ocrMerchantRaw" type="text"></label>
+   <label>Esercente<input id="ocrMerchant" type="text"></label>
+   <label>Categoria<select id="ocrCategory"></select></label>
+   <label>Descrizione<input id="ocrDescription" type="text"></label>
+ </div>
+ <button id="useOcr">Porta i dati nella maschera</button>
+ <p class="tiny">OCR sperimentale tramite Tesseract.js: in questa versione richiede connessione Internet.</p>
+ </div>
+</section>
+
+<section id="bank" class="view">
+ <div class="card"><h2>Importa estratto conto</h2>
+ <p class="muted">Carica un CSV esportato dalla banca. I movimenti vengono analizzati prima dell'importazione: quelli già presenti vengono proposti come corrispondenze, gli altri restano “da classificare”. Nessun dato viene importato automaticamente.</p>
+ <input id="bankFile" type="file" accept=".csv,text/csv,.txt">
+ <div id="bankStatus" class="muted"></div>
+ <div id="bankPreview"></div>
+ </div>
+</section>
+
+<section id="settings" class="view">
+ <div class="card"><h2>Backup e portabilità</h2>
+ <p class="muted">I dati vivono sul dispositivo/browser. Esporta periodicamente un backup: il codice dell'app può stare su GitHub Pages, i dati personali no.</p>
+ <div class="buttonStack">
+   <button id="exportJson" class="primary">Esporta backup JSON</button>
+   <button id="exportCsv">Esporta tutti i movimenti CSV</button>
+   <label class="fileButton">Importa backup JSON<input id="importJson" type="file" accept="application/json,.json" hidden></label>
+ </div>
+ <hr><h3>Statistiche archivio</h3><div id="dbStats"></div>
+ </div>
+</section>
+</main>
+<script src="./seed.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

@@ -8,7 +8,7 @@
 <title>Contabilità Ivan</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png">
-<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./styles.css?v=0.3.0">
 </head>
 <body>
 <header><div><h1>Contabilità</h1><p>Archivio personale · local-first</p></div><button id="installBtn" hidden>Installa</button></header>
@@ -71,7 +71,7 @@
 <section id="receipt" class="view">
  <div class="card"><h2>Acquisisci scontrino</h2>
  <p class="muted">L'OCR non salva mai da solo. Legge lo scontrino, propone i campi e tu puoi correggerli prima di portarli nella maschera definitiva.</p>
- <input id="receiptImage" type="file" accept="image/*" capture="environment">
+ <div class="buttonStack"><label>Scatta foto<input id="receiptCamera" type="file" accept="image/*" capture="environment"></label><label>Scegli dalla Galleria / file<input id="receiptImage" type="file" accept="image/*"></label></div><label><input id="ocrEnhance" type="checkbox" checked> Migliora contrasto e ridimensiona prima della lettura</label>
  <img id="receiptPreview" class="preview" hidden>
  <button id="ocrBtn" class="primary" disabled>Leggi scontrino</button>
  <div id="ocrStatus" class="muted"></div>
@@ -112,6 +112,6 @@
 </main>
 <script src="./seed.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="./app.js"></script>
+<script src="./app.js?v=0.3.0"></script>
 </body>
 </html>

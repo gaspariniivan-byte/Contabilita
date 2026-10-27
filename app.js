@@ -30,7 +30,21 @@ function rememberAlias(raw,display){if(raw&&display&&norm(raw)!==norm(display))a
 function applyAlias(raw){return aliases[norm(raw)]?.display||raw}
 function submitForm(e){e.preventDefault();let val=Math.abs(+$('#amount').value);if($('#kind').value==='expense')val=-val;const id=$('#editId').value||crypto.randomUUID(),old=tx.find(x=>x.id===id);const rec={id,date:$('#date').value,category:$('#category').value,cash:$('#payment').value==='cash'?val:null,account:$('#payment').value==='account'?val:null,description:$('#description').value.trim(),merchantRaw:$('#merchantRaw').value.trim(),merchant:$('#merchant').value.trim(),diesel:$('#diesel').value?+$('#diesel').value:null,petrol:$('#petrol').value?+$('#petrol').value:null,source:old?.source||'App',bankRef:old?.bankRef||null};if($('#rememberAlias').checked)rememberAlias(rec.merchantRaw,rec.merchant);if(old)tx=tx.map(x=>x.id===id?rec:x);else tx.push(rec);persist();setupSelects();resetForm();renderAll();alert(old?'Movimento aggiornato':'Movimento registrato');navTo('transactions')}
 function csvDownload(rows,name){const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(';')).join('\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
-function parseOCR(t){const lines=t.split(/\n/).map(x=>x.trim()).filter(Boolean),date=t.match(/\b([0-3]?\d)[\/.\-]([01]?\d)[\/.\-](20\d{2}|\d{2})\b/),nums=[...t.matchAll(/(?:€\s*)?(\d{1,4}[,.]\d{2})/g)].map(m=>+m[1].replace(',','.')).filter(n=>n<10000);let total=Math.max(...nums,0),merchant=lines.find(x=>/[A-Za-zÀ-ÿ]{3}/.test(x))||'',iso='';if(date){let y=date[3].length===2?'20'+date[3]:date[3];iso=`${y}-${date[2].padStart(2,'0')}-${date[1].padStart(2,'0')}`}const low=norm(t);let category='';if(/farmacia|parafarmacia/.test(low))category=cats.find(c=>norm(c)==='mediche')||'';else if(/benzina|diesel|gasolio|carburante/.test(low))category=cats.find(c=>norm(c).includes('carbur'))||'';else if(/ristorante|pizzeria|trattoria/.test(low))category=cats.find(c=>norm(c).includes('ristor'))||'';else if(/supermercato|conad|lidl|coop|despar/.test(low))category=cats.find(c=>norm(c)==='spesa')||'';return{iso,total,merchantRaw:merchant,merchant:applyAlias(merchant),category}}
+function parseOCR(t){
+ const lines=t.split(/\n/).map(x=>x.trim()).filter(Boolean);
+ const dm=t.match(/\b([0-3]?\d)[\/.\-]([01]?\d)[\/.\-](20\d{2}|\d{2})\b/);
+ const money=s=>{const m=String(s).match(/(\d{1,5}[,.]\d{2})\s*(?:€|EUR)?/i);return m?Number(m[1].replace(',','.')):null};
+ let total=null;
+ for(const re of [/^\s*totale\s+complessivo\b/i,/^\s*totale\s+(?:da\s+pagare|documento|euro)?\b/i,/^\s*importo\s+pagato\b/i,/^\s*pagamento\s+elettronico\b/i]){
+  const candidates=lines.filter(l=>re.test(l)).map(l=>money(l.replace(re,''))).filter(v=>v!==null);
+  if(candidates.length){total=candidates[0];break}
+ }
+ if(total===null){const vals=lines.map(l=>money(l)).filter(v=>v!==null&&v<10000);total=vals.length?Math.max(...vals):0}
+ const merchant=lines.find(x=>/[A-Za-zÀ-ÿ]{3}/.test(x))||'';
+ let iso='';if(dm){const y=dm[3].length===2?'20'+dm[3]:dm[3];iso=`${y}-${dm[2].padStart(2,'0')}-${dm[1].padStart(2,'0')}`}
+ const low=norm(t);let category='';if(/farmacia|parafarmacia/.test(low))category=cats.find(c=>norm(c)==='mediche')||'';else if(/benzina|diesel|gasolio|carburante/.test(low))category=cats.find(c=>norm(c).includes('carbur'))||'';else if(/ristorante|pizzeria|trattoria/.test(low))category=cats.find(c=>norm(c).includes('ristor'))||'';else if(/supermercato|conad|lidl|coop|despar/.test(low))category=cats.find(c=>norm(c)==='spesa')||'';
+ return {iso,total,merchantRaw:merchant,merchant:applyAlias(merchant),category};
+}
 function fillOcrDraft(p){$('#ocrDate').value=p.iso||'';$('#ocrAmount').value=p.total||'';$('#ocrMerchantRaw').value=p.merchantRaw||'';$('#ocrMerchant').value=p.merchant||'';if(p.category)$('#ocrCategory').value=p.category}
 function parseDateAny(s){s=String(s||'').trim();let m=s.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);if(m){let y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`}let d=new Date(s);return isNaN(d)?'':d.toISOString().slice(0,10)}
 function parseAmountAny(s){if(typeof s==='number')return s;s=String(s||'').replace(/\s/g,'').replace(/\.(?=\d{3}(?:\D|$))/g,'').replace(',','.').replace(/[^0-9+\-.]/g,'');return Number(s)||0}
@@ -48,7 +62,32 @@ function exportJson(){const data={version:2,exportedAt:new Date().toISOString(),
 function setup(){setupSelects();if(!$('#homeMonth').dataset.ready){['homeMonth','anMonth'].forEach(id=>{for(let i=0;i<12;i++)$('#'+id).insertAdjacentHTML('beforeend',`<option value="${String(i+1).padStart(2,'0')}">${months[i]}</option>`);$('#'+id).dataset.ready='1'})}resetForm();renderAll()}
 $$('nav button').forEach(b=>b.onclick=()=>navTo(b.dataset.view));['homeYear','homeMonth','txYear','txCategory','anYear','anMonth','medYear'].forEach(id=>$('#'+id).onchange=renderAll);$('#search').oninput=renderTransactions;$('#txForm').onsubmit=e=>{const pending=sessionStorage.getItem('pendingBank');submitForm(e);if(pending){const r=JSON.parse(pending),last=tx[tx.length-1];if(last){last.source='Banca';last.bankRef={date:r.date,amount:r.amount,description:r.description};last.reconciled=true;persist()}sessionStorage.removeItem('pendingBank');renderAll()}};$('#cancelEdit').onclick=()=>resetForm();$('#merchantRaw').onblur=()=>{if(!$('#merchant').value.trim())$('#merchant').value=applyAlias($('#merchantRaw').value.trim())};$('#ocrMerchantRaw').onblur=()=>{$('#ocrMerchant').value=applyAlias($('#ocrMerchantRaw').value.trim())};
 $('#exportMedical').onclick=()=>{let a=expenses(selected($('#medYear').value,'')).filter(x=>norm(x.category)==='mediche');csvDownload([['DATA','GENERE','CASH','CONTO C.','MERCEOLOGICO','RAGIONE SOCIALE','ESERCENTE'],...a.map(x=>[x.date,x.category,x.cash??'',x.account??'',x.description,x.merchantRaw||'',x.merchant||''])],`spese_mediche_${$('#medYear').value}.csv`)};
-let imgFile=null;$('#receiptImage').onchange=e=>{imgFile=e.target.files[0];if(!imgFile)return;$('#receiptPreview').src=URL.createObjectURL(imgFile);$('#receiptPreview').hidden=false;$('#ocrBtn').disabled=false};$('#ocrBtn').onclick=async()=>{if(!imgFile)return;$('#ocrStatus').textContent='Lettura in corso…';try{let r=await Tesseract.recognize(imgFile,'ita',{logger:m=>{if(m.status==='recognizing text')$('#ocrStatus').textContent=`OCR ${Math.round(m.progress*100)}%`}});$('#ocrText').value=r.data.text;fillOcrDraft(parseOCR(r.data.text));$('#ocrStatus').textContent='Proposta pronta: correggi liberamente i campi qui sotto.'}catch(e){$('#ocrStatus').textContent='OCR non disponibile: '+e.message}};$('#useOcr').onclick=()=>{resetForm();$('#date').value=$('#ocrDate').value||new Date().toISOString().slice(0,10);$('#amount').value=$('#ocrAmount').value;$('#merchantRaw').value=$('#ocrMerchantRaw').value;$('#merchant').value=$('#ocrMerchant').value;$('#category').value=$('#ocrCategory').value;$('#description').value=$('#ocrDescription').value;navTo('add')};
+let imgFile=null,previewUrl=null;
+function chooseReceipt(file){if(!file)return;imgFile=file;if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(file);$('#receiptPreview').src=previewUrl;$('#receiptPreview').hidden=false;$('#ocrBtn').disabled=false;$('#ocrStatus').textContent='Immagine pronta.';$('#ocrText').value=''}
+$('#receiptImage').onchange=e=>chooseReceipt(e.target.files[0]);
+$('#receiptCamera').onchange=e=>chooseReceipt(e.target.files[0]);
+async function prepareReceipt(file){
+ if(!$('#ocrEnhance').checked)return file;
+ const bitmap=await createImageBitmap(file),maxSide=1900,scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+ const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
+ const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
+ const im=ctx.getImageData(0,0,canvas.width,canvas.height),d=im.data;
+ for(let i=0;i<d.length;i+=4){const gray=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(gray-128)*1.35+140));d[i]=d[i+1]=d[i+2]=v}
+ ctx.putImageData(im,0,0);return canvas;
+}
+$('#ocrBtn').onclick=async()=>{
+ if(!imgFile)return;$('#ocrBtn').disabled=true;$('#ocrStatus').textContent='Preparazione immagine…';
+ try{
+  if(!window.Tesseract)throw Error('Libreria Tesseract non caricata: controlla la connessione.');
+  const input=await prepareReceipt(imgFile);
+  const r=await Tesseract.recognize(input,'ita',{logger:m=>{if(m.status==='recognizing text')$('#ocrStatus').textContent=`OCR ${Math.round(m.progress*100)}%`}});
+  const text=r.data.text||'';$('#ocrText').value=text;
+  const meaningful=text.match(/[A-Za-zÀ-ÿ]{3,}/g)||[];
+  if(meaningful.length<4){$('#ocrStatus').textContent='Testo poco leggibile. Prova a disattivare «Migliora contrasto», oppure usa una scansione ritagliata. Nessun dato registrato.';return}
+  fillOcrDraft(parseOCR(text));$('#ocrStatus').textContent='Lettura terminata: verifica attentamente importo, data ed esercente.';
+ }catch(e){$('#ocrStatus').textContent='OCR non disponibile: '+(e?.message||String(e))}finally{$('#ocrBtn').disabled=false}
+};
+$('#useOcr').onclick=()=>{resetForm();$('#date').value=$('#ocrDate').value||new Date().toISOString().slice(0,10);$('#amount').value=$('#ocrAmount').value;$('#merchantRaw').value=$('#ocrMerchantRaw').value;$('#merchant').value=$('#ocrMerchant').value;$('#category').value=$('#ocrCategory').value;$('#description').value=$('#ocrDescription').value;navTo('add')};
 $('#bankFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const text=await f.text();bankRows=parseBankCsv(text);$('#bankStatus').textContent=bankRows.length?`${bankRows.length} movimenti letti. Controlla le proposte prima di importare.`:'Non sono riuscito a riconoscere i movimenti nel CSV.';renderBank()};
 $('#exportJson').onclick=exportJson;$('#exportCsv').onclick=exportAllCsv;$('#importJson').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.transactions))throw Error('Formato non riconosciuto');if(confirm(`Importare ${d.transactions.length} movimenti sostituendo l'archivio locale attuale?`)){tx=d.transactions;aliases=d.aliases||{};cats=[...new Set([...(d.categories||[]),...tx.map(x=>x.category)])].filter(Boolean).sort();persist();setupSelects();renderAll();alert('Backup importato')}}catch(err){alert('Backup non valido: '+err.message)}};
 let deferredPrompt;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').hidden=false});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});setup();

@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111827">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Contabilità Ivan</title>
-<link rel="manifest" href="./manifest.webmanifest">
+<title>Contabilità Ivan v0.5.1</title>
+<!-- Manifest disattivato nel collaudo -->
 <link rel="icon" href="./icon-192.png">
-<link rel="stylesheet" href="./styles.css?v=0.3.0">
+<link rel="stylesheet" href="./styles.css?v=0.5.0">
 </head>
 <body>
-<header><div><h1>Contabilità</h1><p>Archivio personale · local-first</p></div><button id="installBtn" hidden>Installa</button></header>
+<header><div><h1>Contabilità · v0.5.1</h1><p>Archivio personale · local-first</p></div><button id="installBtn" hidden>Installa</button></header>
 <nav>
 <button data-view="home" class="active">Riepilogo</button>
 <button data-view="add">+ Spesa</button>
@@ -38,9 +38,11 @@
     <label>Data<input id="date" type="date" required></label>
     <label>Tipo<select id="kind"><option value="expense">Spesa</option><option value="income">Entrata</option></select></label>
     <label>Categoria<select id="category" required></select></label>
-    <label>Importo (€)<input id="amount" type="number" min="0" step="0.01" inputmode="decimal" required></label>
-    <label>Pagamento<select id="payment"><option value="account">Conto / carta</option><option value="cash">Contanti</option></select></label>
+    <label id="singleAmountLabel">Importo (€)<input id="amount" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+    <label id="singlePaymentLabel">Pagamento<select id="payment"><option value="account">Conto / carta</option><option value="cash">Contanti</option></select></label>
+    <div id="splitPaymentFields" hidden><p><b>Movimento con due importi:</b> modifica separatamente Contanti e Conto. I valori originali sono mantenuti finché non li cambi.</p><div class="row2"><label>Contanti (€)<input id="splitCash" type="number" min="0" step="0.01" inputmode="decimal"></label><label>Conto (€)<input id="splitAccount" type="number" min="0" step="0.01" inputmode="decimal"></label></div></div>
     <label>Merceologico / descrizione<input id="description" type="text"></label>
+    <label>Note (facoltative)<textarea id="note" rows="3" placeholder="Dettagli, promemoria, rimborsi..."></textarea></label>
     <label>Ragione sociale / testo originale<input id="merchantRaw" type="text" placeholder="Come compare su scontrino/conto"></label>
     <label>Esercente visualizzato<input id="merchant" type="text" placeholder="Es. Conad Aviano"></label>
     <div class="row2"><label>Diesel €/l<input id="diesel" type="number" step="0.001"></label><label>Benzina €/l<input id="petrol" type="number" step="0.001"></label></div>
@@ -72,21 +74,23 @@
  <div class="card"><h2>Acquisisci scontrino</h2>
  <p class="muted">L'OCR non salva mai da solo. Legge lo scontrino, propone i campi e tu puoi correggerli prima di portarli nella maschera definitiva.</p>
  <div class="buttonStack"><label>Scatta foto<input id="receiptCamera" type="file" accept="image/*" capture="environment"></label><label>Scegli dalla Galleria / file<input id="receiptImage" type="file" accept="image/*"></label></div><label><input id="ocrEnhance" type="checkbox" checked> Migliora contrasto e ridimensiona prima della lettura</label>
- <div id="cropPanel" hidden>
-  <p class="muted">Trascina gli angoli del rettangolo per includere solo lo scontrino. Il ritaglio viene applicato prima dell’OCR.</p>
-  <div id="cropStage" style="position:relative;overflow:hidden;touch-action:none;max-width:100%;display:inline-block;line-height:0;user-select:none">
-   <img id="cropPhoto" alt="Fotografia da ritagliare" style="display:block;max-width:100%;max-height:65vh;width:auto;height:auto;pointer-events:none">
-   <div id="cropBox" style="position:absolute;border:2px solid #22c55e;box-shadow:0 0 0 9999px #0007;box-sizing:border-box;touch-action:none">
-    <span data-handle="nw" style="position:absolute;left:-12px;top:-12px;width:24px;height:24px;background:#22c55e;border:2px solid white;border-radius:50%"></span>
-    <span data-handle="ne" style="position:absolute;right:-12px;top:-12px;width:24px;height:24px;background:#22c55e;border:2px solid white;border-radius:50%"></span>
-    <span data-handle="sw" style="position:absolute;left:-12px;bottom:-12px;width:24px;height:24px;background:#22c55e;border:2px solid white;border-radius:50%"></span>
-    <span data-handle="se" style="position:absolute;right:-12px;bottom:-12px;width:24px;height:24px;background:#22c55e;border:2px solid white;border-radius:50%"></span>
+  <div id="cropPanel" hidden>
+   <p class="muted">Regola i quattro vertici verdi liberamente. Le maniglie blu al centro spostano un lato solo in orizzontale o verticale. Tocca «Anteprima raddrizzata» prima dell’OCR.</p>
+   <div id="cropStage" style="position:relative;overflow:hidden;touch-action:none;max-width:100%;display:inline-block;line-height:0;user-select:none">
+    <img id="cropPhoto" alt="Fotografia da ritagliare" style="display:block;max-width:100%;max-height:65vh;width:auto;height:auto;pointer-events:none">
+    <svg id="cropOverlay" style="position:absolute;inset:0;width:100%;height:100%;overflow:hidden;touch-action:none" aria-label="Selezione prospettica">
+      <path id="cropShade" fill="rgba(0,0,0,.45)" fill-rule="evenodd"></path>
+      <polygon id="cropOutline" fill="none" stroke="#22c55e" stroke-width="2.5" vector-effect="non-scaling-stroke"></polygon>
+      <g id="cropHandles"></g>
+    </svg>
    </div>
+   <div class="buttonStack"><button id="cropReset" type="button">Ripristina selezione</button><button id="cropPreviewBtn" type="button">Anteprima raddrizzata</button><label><input id="cropEnable" type="checkbox" checked> Usa ritaglio per OCR</label></div>
+   <div id="cropFeedback" class="muted" role="status"></div>
+   <div id="cropResult" hidden><p class="muted">Anteprima della trasformazione: controlla che testo e bordi siano leggibili.</p><img id="cropResultImage" alt="Scontrino raddrizzato" class="preview"><button id="cropDownload" type="button">Scarica PNG raddrizzato</button><button id="cropBack" type="button">Modifica selezione</button></div>
   </div>
-  <div class="buttonStack"><button id="cropReset" type="button">Ripristina ritaglio</button><label><input id="cropEnable" type="checkbox" checked> Usa ritaglio per OCR</label></div>
- </div>
  <img id="receiptPreview" class="preview" hidden>
- <button id="ocrBtn" class="primary" disabled>Leggi scontrino</button>
+ <label><input id="ocrHighDef" type="checkbox"> OCR alta definizione (sperimentale, più lento)</label>
+  <button id="ocrBtn" class="primary" disabled>Leggi scontrino</button>
  <div id="ocrStatus" class="muted"></div>
  <textarea id="ocrText" rows="7" placeholder="Testo riconosciuto..."></textarea>
  <div class="ocrGrid">
@@ -125,6 +129,6 @@
 </main>
 <script src="./seed.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="./app.js?v=0.3.0"></script>
+<script src="./app.js?v=0.5.1"></script>
 </body>
 </html>

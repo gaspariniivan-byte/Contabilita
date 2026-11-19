@@ -23,12 +23,38 @@ function renderAnalysis(){const a=expenses(selected($('#anYear').value,$('#anMon
 function renderMedical(){const y=$('#medYear').value,a=expenses(selected(y,'')).filter(x=>norm(x.category)==='mediche').sort((a,b)=>b.date.localeCompare(a.date));const tot=-a.reduce((s,x)=>s+amount(x),0);$('#medicalSummary').innerHTML=`<p><b>Totale ${y}: ${euro(tot)}</b> · ${a.length} voci</p>`;$('#medicalList').innerHTML=a.map(txHtml).join('')}
 function renderStats(){const bank=tx.filter(x=>x.source==='Banca').length,ocr=tx.filter(x=>x.source==='OCR').length;$('#dbStats').innerHTML=`<p><b>${tx.length}</b> movimenti · <b>${years().length}</b> anni · <b>${Object.keys(aliases).length}</b> associazioni esercenti · <b>${bank}</b> importati da banca · <b>${ocr}</b> da OCR.</p>`}
 function renderAll(){renderHome();renderTransactions();renderAnalysis();renderMedical();renderStats()}
-function resetForm(){$('#txForm').reset();$('#editId').value='';$('#formTitle').textContent='Nuovo movimento';$('#saveBtn').textContent='Registra';$('#cancelEdit').hidden=true;$('#date').value=new Date().toISOString().slice(0,10);$('#rememberAlias').checked=true;$('#note').value=''}
-window.editTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;$('#editId').value=id;$('#date').value=x.date;$('#kind').value=amount(x)<0?'expense':'income';$('#category').value=x.category;$('#amount').value=Math.abs(amount(x));$('#payment').value=x.cash!=null?'cash':'account';$('#description').value=x.description||'';$('#note').value=x.note||'';$('#merchantRaw').value=x.merchantRaw||x.merchant||'';$('#merchant').value=x.merchant||'';$('#diesel').value=x.diesel??'';$('#petrol').value=x.petrol??'';$('#formTitle').textContent='Modifica movimento';$('#saveBtn').textContent='Salva modifiche';$('#cancelEdit').hidden=false;navTo('add')}
+function setSplitMode(enabled){$('#splitPaymentFields').hidden=!enabled;$('#singleAmountLabel').hidden=enabled;$('#singlePaymentLabel').hidden=enabled;$('#amount').required=!enabled;$('#splitCash').required=enabled;$('#splitAccount').required=enabled}
+function resetForm(){setSplitMode(false);$('#splitCash').value='';$('#splitAccount').value='';$('#txForm').reset();$('#editId').value='';$('#formTitle').textContent='Nuovo movimento';$('#saveBtn').textContent='Registra';$('#cancelEdit').hidden=true;$('#date').value=new Date().toISOString().slice(0,10);$('#rememberAlias').checked=true;$('#note').value=''}
+window.editTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;$('#editId').value=id;$('#date').value=x.date;$('#kind').value=amount(x)<0?'expense':'income';$('#category').value=x.category;$('#amount').value=Math.abs(amount(x));const dual=x.cash!=null&&x.account!=null;setSplitMode(dual);if(dual){$('#splitCash').value=Math.abs(Number(x.cash));$('#splitAccount').value=Math.abs(Number(x.account))}$('#payment').value=x.cash!=null?'cash':'account';$('#description').value=x.description||'';$('#note').value=x.note||'';$('#merchantRaw').value=x.merchantRaw||x.merchant||'';$('#merchant').value=x.merchant||'';$('#diesel').value=x.diesel??'';$('#petrol').value=x.petrol??'';$('#formTitle').textContent='Modifica movimento';$('#saveBtn').textContent='Salva modifiche';$('#cancelEdit').hidden=false;navTo('add')}
 window.deleteTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;if(confirm(`Eliminare il movimento ${x.date} · ${x.description||x.category} · ${euro(amount(x))}?`)){tx=tx.filter(t=>t.id!==id);persist();setupSelects();renderAll()}}
 function rememberAlias(raw,display){if(raw&&display&&norm(raw)!==norm(display))aliases[norm(raw)]={display,raw}}
 function applyAlias(raw){return aliases[norm(raw)]?.display||raw}
-function submitForm(e){e.preventDefault();let val=Math.abs(+$('#amount').value);if($('#kind').value==='expense')val=-val;const id=$('#editId').value||crypto.randomUUID(),old=tx.find(x=>x.id===id);const rec={id,date:$('#date').value,category:$('#category').value,cash:$('#payment').value==='cash'?val:null,account:$('#payment').value==='account'?val:null,description:$('#description').value.trim(),note:$('#note').value.trim(),merchantRaw:$('#merchantRaw').value.trim(),merchant:$('#merchant').value.trim(),diesel:$('#diesel').value?+$('#diesel').value:null,petrol:$('#petrol').value?+$('#petrol').value:null,source:old?.source||'App',bankRef:old?.bankRef||null,...(old?.reconciled!==undefined?{reconciled:old.reconciled}:{})};if($('#rememberAlias').checked)rememberAlias(rec.merchantRaw,rec.merchant);if(old)tx=tx.map(x=>x.id===id?rec:x);else tx.push(rec);persist();setupSelects();resetForm();renderAll();alert(old?'Movimento aggiornato':'Movimento registrato');navTo('transactions')}
+function submitForm(e){
+ e.preventDefault();
+ const id=$('#editId').value||crypto.randomUUID(),old=tx.find(x=>x.id===id);
+ const dual=Boolean(old&&old.cash!=null&&old.account!=null);
+ const sign=$('#kind').value==='expense'?-1:1;
+ let cash=null,account=null;
+ if(dual){
+  const c=Number($('#splitCash').value),a=Number($('#splitAccount').value);
+  if(!Number.isFinite(c)||!Number.isFinite(a)||c<0||a<0){alert('Inserisci due importi validi e non negativi.');return}
+  cash=sign*c;account=sign*a;
+ }else{
+  const v=Number($('#amount').value);
+  if(!Number.isFinite(v)||v<0){alert('Inserisci un importo valido.');return}
+  const val=sign*v;
+  if($('#payment').value==='cash')cash=val;else account=val;
+ }
+ // Manteniamo anche i campi aggiuntivi eventualmente presenti nel record originale.
+ const rec={...(old||{}),id,date:$('#date').value,category:$('#category').value,cash,account,
+  description:$('#description').value.trim(),note:$('#note').value.trim(),
+  merchantRaw:$('#merchantRaw').value.trim(),merchant:$('#merchant').value.trim(),
+  diesel:$('#diesel').value?+$('#diesel').value:null,petrol:$('#petrol').value?+$('#petrol').value:null,
+  source:old?.source||'App',bankRef:old?.bankRef??null};
+ if($('#rememberAlias').checked)rememberAlias(rec.merchantRaw,rec.merchant);
+ if(old)tx=tx.map(x=>x.id===id?rec:x);else tx.push(rec);
+ persist();setupSelects();resetForm();renderAll();alert(old?'Movimento aggiornato':'Movimento registrato');navTo('transactions')
+}
 function csvDownload(rows,name){const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(';')).join('\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
 function parseOCR(t){
  const lines=t.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);

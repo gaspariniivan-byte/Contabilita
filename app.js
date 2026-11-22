@@ -1,8 +1,8 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const euro=n=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(n||0);
 const months=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-const LS_TX='ivanTxV2', LS_ALIAS='ivanMerchantAliases';
-let tx=JSON.parse(localStorage.getItem(LS_TX)||'null') || JSON.parse(localStorage.getItem('ivanTx')||'null') || window.SEED_TRANSACTIONS || [];
+const LS_TX='ivanTxV2_TEST_v051_MIXED', LS_ALIAS='ivanMerchantAliases_TEST_v051_MIXED';
+let tx=JSON.parse(localStorage.getItem(LS_TX)||'null') || window.SEED_TRANSACTIONS || [];
 let aliases=JSON.parse(localStorage.getItem(LS_ALIAS)||'{}');
 let cats=[...new Set([...(window.SEED_CATEGORIES||[]),...tx.map(x=>x.category)])].filter(Boolean).sort((a,b)=>a.localeCompare(b,'it'));
 let bankRows=[];
@@ -23,25 +23,28 @@ function renderAnalysis(){const a=expenses(selected($('#anYear').value,$('#anMon
 function renderMedical(){const y=$('#medYear').value,a=expenses(selected(y,'')).filter(x=>norm(x.category)==='mediche').sort((a,b)=>b.date.localeCompare(a.date));const tot=-a.reduce((s,x)=>s+amount(x),0);$('#medicalSummary').innerHTML=`<p><b>Totale ${y}: ${euro(tot)}</b> · ${a.length} voci</p>`;$('#medicalList').innerHTML=a.map(txHtml).join('')}
 function renderStats(){const bank=tx.filter(x=>x.source==='Banca').length,ocr=tx.filter(x=>x.source==='OCR').length;$('#dbStats').innerHTML=`<p><b>${tx.length}</b> movimenti · <b>${years().length}</b> anni · <b>${Object.keys(aliases).length}</b> associazioni esercenti · <b>${bank}</b> importati da banca · <b>${ocr}</b> da OCR.</p>`}
 function renderAll(){renderHome();renderTransactions();renderAnalysis();renderMedical();renderStats()}
-function setSplitMode(enabled){$('#splitPaymentFields').hidden=!enabled;$('#singleAmountLabel').hidden=enabled;$('#singlePaymentLabel').hidden=enabled;$('#amount').required=!enabled;$('#splitCash').required=enabled;$('#splitAccount').required=enabled}
-function resetForm(){setSplitMode(false);$('#splitCash').value='';$('#splitAccount').value='';$('#txForm').reset();$('#editId').value='';$('#formTitle').textContent='Nuovo movimento';$('#saveBtn').textContent='Registra';$('#cancelEdit').hidden=true;$('#date').value=new Date().toISOString().slice(0,10);$('#rememberAlias').checked=true;$('#note').value=''}
-window.editTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;$('#editId').value=id;$('#date').value=x.date;$('#kind').value=amount(x)<0?'expense':'income';$('#category').value=x.category;$('#amount').value=Math.abs(amount(x));const dual=x.cash!=null&&x.account!=null;setSplitMode(dual);if(dual){$('#splitCash').value=Math.abs(Number(x.cash));$('#splitAccount').value=Math.abs(Number(x.account))}$('#payment').value=x.cash!=null?'cash':'account';$('#description').value=x.description||'';$('#note').value=x.note||'';$('#merchantRaw').value=x.merchantRaw||x.merchant||'';$('#merchant').value=x.merchant||'';$('#diesel').value=x.diesel??'';$('#petrol').value=x.petrol??'';$('#formTitle').textContent='Modifica movimento';$('#saveBtn').textContent='Salva modifiche';$('#cancelEdit').hidden=false;navTo('add')}
+function updateSplitTotal(){const c=Number($('#splitCash').value||0),a=Number($('#splitAccount').value||0);$('#splitTotal').textContent='Totale: '+euro(c+a)}
+function setSplitMode(enabled){$('#splitPaymentFields').hidden=!enabled;$('#singleAmountLabel').hidden=enabled;$('#amount').required=!enabled;$('#splitCash').required=enabled;$('#splitAccount').required=enabled;updateSplitTotal()}
+function syncPaymentMode(){setSplitMode($('#payment').value==='mixed')}
+function resetForm(){$('#txForm').reset();$('#payment').value='account';$('#splitCash').value='';$('#splitAccount').value='';syncPaymentMode();$('#editId').value='';$('#formTitle').textContent='Nuovo movimento';$('#saveBtn').textContent='Registra';$('#cancelEdit').hidden=true;$('#date').value=new Date().toISOString().slice(0,10);$('#rememberAlias').checked=true;$('#note').value=''}
+window.editTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;$('#editId').value=id;$('#date').value=x.date;$('#kind').value=amount(x)<0?'expense':'income';$('#category').value=x.category;$('#amount').value=Math.abs(amount(x));const dual=x.cash!=null&&x.account!=null;$('#payment').value=dual?'mixed':x.cash!=null?'cash':'account';$('#splitCash').value=dual?Math.abs(Number(x.cash)):'';$('#splitAccount').value=dual?Math.abs(Number(x.account)):'';syncPaymentMode();$('#description').value=x.description||'';$('#note').value=x.note||'';$('#merchantRaw').value=x.merchantRaw||x.merchant||'';$('#merchant').value=x.merchant||'';$('#diesel').value=x.diesel??'';$('#petrol').value=x.petrol??'';$('#formTitle').textContent='Modifica movimento';$('#saveBtn').textContent='Salva modifiche';$('#cancelEdit').hidden=false;navTo('add')}
 window.deleteTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;if(confirm(`Eliminare il movimento ${x.date} · ${x.description||x.category} · ${euro(amount(x))}?`)){tx=tx.filter(t=>t.id!==id);persist();setupSelects();renderAll()}}
 function rememberAlias(raw,display){if(raw&&display&&norm(raw)!==norm(display))aliases[norm(raw)]={display,raw}}
 function applyAlias(raw){return aliases[norm(raw)]?.display||raw}
 function submitForm(e){
  e.preventDefault();
  const id=$('#editId').value||crypto.randomUUID(),old=tx.find(x=>x.id===id);
- const dual=Boolean(old&&old.cash!=null&&old.account!=null);
+ const dual=$('#payment').value==='mixed';
  const sign=$('#kind').value==='expense'?-1:1;
  let cash=null,account=null;
  if(dual){
-  const c=Number($('#splitCash').value),a=Number($('#splitAccount').value);
-  if(!Number.isFinite(c)||!Number.isFinite(a)||c<0||a<0){alert('Inserisci due importi validi e non negativi.');return}
+  const rawC=$('#splitCash').value.trim(),rawA=$('#splitAccount').value.trim();
+  const c=Number(rawC),a=Number(rawA);
+  if(rawC===''||rawA===''||!Number.isFinite(c)||!Number.isFinite(a)||c<0||a<0||c+a<=0){alert('Inserisci due importi validi e non negativi, con totale maggiore di zero.');return}
   cash=sign*c;account=sign*a;
  }else{
-  const v=Number($('#amount').value);
-  if(!Number.isFinite(v)||v<0){alert('Inserisci un importo valido.');return}
+  const raw=$('#amount').value.trim(),v=Number(raw);
+  if(raw===''||!Number.isFinite(v)||v<=0){alert('Inserisci un importo maggiore di zero.');return}
   const val=sign*v;
   if($('#payment').value==='cash')cash=val;else account=val;
  }
@@ -93,7 +96,7 @@ window.importBank=i=>{const r=bankRows[i];resetForm();$('#date').value=r.date;$(
 function exportAllCsv(){csvDownload([['DATA','CATEGORIA','CONTANTI','CONTO','DESCRIZIONE','RAGIONE_SOCIALE_ORIGINALE','ESERCENTE','DIESEL','BENZINA','FONTE','RICONCILIATO','NOTE'],...tx.sort((a,b)=>a.date.localeCompare(b.date)).map(x=>[x.date,x.category,x.cash??'',x.account??'',x.description,x.merchantRaw||'',x.merchant||'',x.diesel??'',x.petrol??'',x.source||'',x.reconciled?'SI':'NO',x.note||''])],`contabilita_${new Date().toISOString().slice(0,10)}.csv`)}
 function exportJson(){const data={version:2,exportedAt:new Date().toISOString(),transactions:tx,aliases,categories:cats};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`contabilita_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
 function setup(){setupSelects();if(!$('#homeMonth').dataset.ready){['homeMonth','anMonth'].forEach(id=>{for(let i=0;i<12;i++)$('#'+id).insertAdjacentHTML('beforeend',`<option value="${String(i+1).padStart(2,'0')}">${months[i]}</option>`);$('#'+id).dataset.ready='1'})}resetForm();renderAll()}
-$$('nav button').forEach(b=>b.onclick=()=>navTo(b.dataset.view));['homeYear','homeMonth','txYear','txCategory','anYear','anMonth','medYear'].forEach(id=>$('#'+id).onchange=renderAll);$('#search').oninput=renderTransactions;$('#txForm').onsubmit=e=>{const pending=sessionStorage.getItem('pendingBank');submitForm(e);if(pending){const r=JSON.parse(pending),last=tx[tx.length-1];if(last){last.source='Banca';last.bankRef={date:r.date,amount:r.amount,description:r.description};last.reconciled=true;persist()}sessionStorage.removeItem('pendingBank');renderAll()}};$('#cancelEdit').onclick=()=>resetForm();$('#merchantRaw').onblur=()=>{if(!$('#merchant').value.trim())$('#merchant').value=applyAlias($('#merchantRaw').value.trim())};$('#ocrMerchantRaw').onblur=()=>{$('#ocrMerchant').value=applyAlias($('#ocrMerchantRaw').value.trim())};
+$$('nav button').forEach(b=>b.onclick=()=>navTo(b.dataset.view));['homeYear','homeMonth','txYear','txCategory','anYear','anMonth','medYear'].forEach(id=>$('#'+id).onchange=renderAll);$('#search').oninput=renderTransactions;$('#txForm').onsubmit=e=>{const pending=sessionStorage.getItem('pendingBank');submitForm(e);if(pending){const r=JSON.parse(pending),last=tx[tx.length-1];if(last){last.source='Banca';last.bankRef={date:r.date,amount:r.amount,description:r.description};last.reconciled=true;persist()}sessionStorage.removeItem('pendingBank');renderAll()}};$('#cancelEdit').onclick=()=>resetForm();$('#payment').onchange=syncPaymentMode;$('#splitCash').oninput=updateSplitTotal;$('#splitAccount').oninput=updateSplitTotal;$('#merchantRaw').onblur=()=>{if(!$('#merchant').value.trim())$('#merchant').value=applyAlias($('#merchantRaw').value.trim())};$('#ocrMerchantRaw').onblur=()=>{$('#ocrMerchant').value=applyAlias($('#ocrMerchantRaw').value.trim())};
 $('#exportMedical').onclick=()=>{let a=expenses(selected($('#medYear').value,'')).filter(x=>norm(x.category)==='mediche');csvDownload([['DATA','GENERE','CASH','CONTO C.','MERCEOLOGICO','RAGIONE SOCIALE','ESERCENTE'],...a.map(x=>[x.date,x.category,x.cash??'',x.account??'',x.description,x.merchantRaw||'',x.merchant||''])],`spese_mediche_${$('#medYear').value}.csv`)};
 let imgFile=null,previewUrl=null,cropImage=null,previewCanvas=null;
 // Normalized corner order: TL, TR, BR, BL. All values are in [0,1].
@@ -266,4 +269,4 @@ $('#ocrBtn').onclick=async()=>{
 $('#useOcr').onclick=()=>{resetForm();$('#date').value=$('#ocrDate').value||'';$('#amount').value=$('#ocrAmount').value;$('#merchantRaw').value=$('#ocrMerchantRaw').value;$('#merchant').value=$('#ocrMerchant').value;$('#category').value=$('#ocrCategory').value;$('#description').value=$('#ocrDescription').value;navTo('add')};
 $('#bankFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const text=await f.text();bankRows=parseBankCsv(text);$('#bankStatus').textContent=bankRows.length?`${bankRows.length} movimenti letti. Controlla le proposte prima di importare.`:'Non sono riuscito a riconoscere i movimenti nel CSV.';renderBank()};
 $('#exportJson').onclick=exportJson;$('#exportCsv').onclick=exportAllCsv;$('#importJson').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.transactions))throw Error('Formato non riconosciuto');if(confirm(`Importare ${d.transactions.length} movimenti sostituendo l'archivio locale attuale?`)){tx=d.transactions;aliases=d.aliases||{};cats=[...new Set([...(d.categories||[]),...tx.map(x=>x.category)])].filter(Boolean).sort();persist();setupSelects();renderAll();alert('Backup importato')}}catch(err){alert('Backup non valido: '+err.message)}};
-let deferredPrompt;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').hidden=false});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});setup();
+let deferredPrompt;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').hidden=false});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null}};setup();

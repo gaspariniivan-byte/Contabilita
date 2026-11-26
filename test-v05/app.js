@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const euro=n=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(n||0);
 const months=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
-const LS_TX='ivanTxV2_TEST_v051_MIXED', LS_ALIAS='ivanMerchantAliases_TEST_v051_MIXED';
+const LS_TX='ivanTxV2_TEST_v051_DUAL2', LS_ALIAS='ivanMerchantAliases_TEST_v051_DUAL2';
 let tx=JSON.parse(localStorage.getItem(LS_TX)||'null') || window.SEED_TRANSACTIONS || [];
 let aliases=JSON.parse(localStorage.getItem(LS_ALIAS)||'{}');
 let cats=[...new Set([...(window.SEED_CATEGORIES||[]),...tx.map(x=>x.category)])].filter(Boolean).sort((a,b)=>a.localeCompare(b,'it'));
@@ -23,37 +23,29 @@ function renderAnalysis(){const a=expenses(selected($('#anYear').value,$('#anMon
 function renderMedical(){const y=$('#medYear').value,a=expenses(selected(y,'')).filter(x=>norm(x.category)==='mediche').sort((a,b)=>b.date.localeCompare(a.date));const tot=-a.reduce((s,x)=>s+amount(x),0);$('#medicalSummary').innerHTML=`<p><b>Totale ${y}: ${euro(tot)}</b> · ${a.length} voci</p>`;$('#medicalList').innerHTML=a.map(txHtml).join('')}
 function renderStats(){const bank=tx.filter(x=>x.source==='Banca').length,ocr=tx.filter(x=>x.source==='OCR').length;$('#dbStats').innerHTML=`<p><b>${tx.length}</b> movimenti · <b>${years().length}</b> anni · <b>${Object.keys(aliases).length}</b> associazioni esercenti · <b>${bank}</b> importati da banca · <b>${ocr}</b> da OCR.</p>`}
 function renderAll(){renderHome();renderTransactions();renderAnalysis();renderMedical();renderStats()}
-function updateSplitTotal(){const c=Number($('#splitCash').value||0),a=Number($('#splitAccount').value||0);$('#splitTotal').textContent='Totale: '+euro(c+a)}
-function setSplitMode(enabled){$('#splitPaymentFields').hidden=!enabled;$('#singleAmountLabel').hidden=enabled;$('#amount').required=!enabled;$('#splitCash').required=enabled;$('#splitAccount').required=enabled;updateSplitTotal()}
-function syncPaymentMode(){setSplitMode($('#payment').value==='mixed')}
-function resetForm(){$('#txForm').reset();$('#payment').value='account';$('#splitCash').value='';$('#splitAccount').value='';syncPaymentMode();$('#editId').value='';$('#formTitle').textContent='Nuovo movimento';$('#saveBtn').textContent='Registra';$('#cancelEdit').hidden=true;$('#date').value=new Date().toISOString().slice(0,10);$('#rememberAlias').checked=true;$('#note').value=''}
-window.editTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;$('#editId').value=id;$('#date').value=x.date;$('#kind').value=amount(x)<0?'expense':'income';$('#category').value=x.category;$('#amount').value=Math.abs(amount(x));const dual=x.cash!=null&&x.account!=null;$('#payment').value=dual?'mixed':x.cash!=null?'cash':'account';$('#splitCash').value=dual?Math.abs(Number(x.cash)):'';$('#splitAccount').value=dual?Math.abs(Number(x.account)):'';syncPaymentMode();$('#description').value=x.description||'';$('#note').value=x.note||'';$('#merchantRaw').value=x.merchantRaw||x.merchant||'';$('#merchant').value=x.merchant||'';$('#diesel').value=x.diesel??'';$('#petrol').value=x.petrol??'';$('#formTitle').textContent='Modifica movimento';$('#saveBtn').textContent='Salva modifiche';$('#cancelEdit').hidden=false;navTo('add')}
+let ocrReferenceTotal=null;
+function cents(v){return Math.round(Number(v||0)*100)}
+function updateSplitTotal(){const t=cents($('#splitCash').value)+cents($('#splitAccount').value);$('#splitTotal').textContent='Totale: '+euro(t/100);$('#ocrCompare').hidden=ocrReferenceTotal===null;if(ocrReferenceTotal!==null){$('#ocrReference').textContent='Totale OCR proposto: '+euro(ocrReferenceTotal/100);const d=t-ocrReferenceTotal;$('#ocrDifference').textContent=d===0?'Importi corrispondenti':'Differenza rispetto all’OCR: '+euro(d/100);}}
+function resetForm(){ocrReferenceTotal=null;sessionStorage.removeItem('pendingBank');$('#txForm').reset();$('#splitCash').value='';$('#splitAccount').value='';updateSplitTotal();$('#editId').value='';$('#formTitle').textContent='Nuovo movimento';$('#saveBtn').textContent='Registra';$('#cancelEdit').hidden=true;$('#date').value=new Date().toISOString().slice(0,10);$('#rememberAlias').checked=true;$('#note').value=''}
+window.editTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;$('#editId').value=id;$('#date').value=x.date;$('#kind').value=amount(x)<0?'expense':'income';$('#category').value=x.category;ocrReferenceTotal=null;sessionStorage.removeItem('pendingBank');$('#splitCash').value=x.cash==null?'':Math.abs(Number(x.cash));$('#splitAccount').value=x.account==null?'':Math.abs(Number(x.account));updateSplitTotal();$('#description').value=x.description||'';$('#note').value=x.note||'';$('#merchantRaw').value=x.merchantRaw||x.merchant||'';$('#merchant').value=x.merchant||'';$('#diesel').value=x.diesel??'';$('#petrol').value=x.petrol??'';$('#formTitle').textContent='Modifica movimento';$('#saveBtn').textContent='Salva modifiche';$('#cancelEdit').hidden=false;navTo('add')}
 window.deleteTx=id=>{const x=tx.find(t=>t.id===id);if(!x)return;if(confirm(`Eliminare il movimento ${x.date} · ${x.description||x.category} · ${euro(amount(x))}?`)){tx=tx.filter(t=>t.id!==id);persist();setupSelects();renderAll()}}
 function rememberAlias(raw,display){if(raw&&display&&norm(raw)!==norm(display))aliases[norm(raw)]={display,raw}}
 function applyAlias(raw){return aliases[norm(raw)]?.display||raw}
 function submitForm(e){
  e.preventDefault();
  const id=$('#editId').value||crypto.randomUUID(),old=tx.find(x=>x.id===id);
- const dual=$('#payment').value==='mixed';
  const sign=$('#kind').value==='expense'?-1:1;
- let cash=null,account=null;
- if(dual){
-  const rawC=$('#splitCash').value.trim(),rawA=$('#splitAccount').value.trim();
-  const c=Number(rawC),a=Number(rawA);
-  if(rawC===''||rawA===''||!Number.isFinite(c)||!Number.isFinite(a)||c<0||a<0||c+a<=0){alert('Inserisci due importi validi e non negativi, con totale maggiore di zero.');return}
-  cash=sign*c;account=sign*a;
- }else{
-  const raw=$('#amount').value.trim(),v=Number(raw);
-  if(raw===''||!Number.isFinite(v)||v<=0){alert('Inserisci un importo maggiore di zero.');return}
-  const val=sign*v;
-  if($('#payment').value==='cash')cash=val;else account=val;
- }
+ const c=Number($('#splitCash').value||0),a=Number($('#splitAccount').value||0);
+ if(!Number.isFinite(c)||!Number.isFinite(a)||c<0||a<0||cents(c)+cents(a)<=0){alert('Inserisci almeno un importo positivo valido.');return}
+ if(ocrReferenceTotal!==null&&cents(c)+cents(a)!==ocrReferenceTotal&&!confirm('Il totale differisce da quello OCR. Confermare gli importi inseriti?'))return;
+ const cash=cents(c)?sign*cents(c)/100:null,account=cents(a)?sign*cents(a)/100:null;
  // Manteniamo anche i campi aggiuntivi eventualmente presenti nel record originale.
  const rec={...(old||{}),id,date:$('#date').value,category:$('#category').value,cash,account,
   description:$('#description').value.trim(),note:$('#note').value.trim(),
   merchantRaw:$('#merchantRaw').value.trim(),merchant:$('#merchant').value.trim(),
   diesel:$('#diesel').value?+$('#diesel').value:null,petrol:$('#petrol').value?+$('#petrol').value:null,
   source:old?.source||'App',bankRef:old?.bankRef??null};
+ const pending=sessionStorage.getItem('pendingBank');if(pending){const r=JSON.parse(pending);rec.source='Banca';rec.bankRef={date:r.date,amount:r.amount,description:r.description};rec.reconciled=account!==null&&Math.abs(account-r.amount)<0.011;}
  if($('#rememberAlias').checked)rememberAlias(rec.merchantRaw,rec.merchant);
  if(old)tx=tx.map(x=>x.id===id?rec:x);else tx.push(rec);
  persist();setupSelects();resetForm();renderAll();alert(old?'Movimento aggiornato':'Movimento registrato');navTo('transactions')
@@ -89,14 +81,14 @@ function detectDelimiter(text){const first=text.split(/\r?\n/)[0]||'';return [';
 function findHeader(headers,patterns){return headers.findIndex(h=>patterns.some(p=>norm(h).includes(p)))}
 function parseBankCsv(text){const delim=detectDelimiter(text),lines=text.split(/\r?\n/).filter(l=>l.trim()),rows=lines.map(l=>splitCsvLine(l,delim));if(rows.length<2)return[];const h=rows[0];let di=findHeader(h,['data contabile','data operazione','data']),ai=findHeader(h,['importo','amount','valore']),debi=findHeader(h,['addebiti','dare']),credi=findHeader(h,['accrediti','avere']),xi=findHeader(h,['descrizione','causale','operazione','dettagli']);return rows.slice(1).map((r,i)=>{let a=ai>=0?parseAmountAny(r[ai]):((credi>=0?Math.abs(parseAmountAny(r[credi])):0)-(debi>=0?Math.abs(parseAmountAny(r[debi])):0));return{id:'bank-'+i,date:parseDateAny(r[di]),amount:a,description:(r[xi]||r.join(' ')).trim(),raw:r}}).filter(x=>x.date&&x.amount)}
 function dayDiff(a,b){return Math.abs((new Date(a)-new Date(b))/86400000)}
-function matchBankRow(r){const candidates=tx.filter(x=>x.account!=null&&Math.abs(amount(x)-r.amount)<0.011&&dayDiff(x.date,r.date)<=3);if(!candidates.length)return null;candidates.sort((a,b)=>dayDiff(a.date,r.date)-dayDiff(b.date,r.date));return candidates[0]}
+function matchBankRow(r){const candidates=tx.filter(x=>x.account!=null&&Math.abs(Number(x.account)-r.amount)<0.011&&dayDiff(x.date,r.date)<=3);if(!candidates.length)return null;candidates.sort((a,b)=>dayDiff(a.date,r.date)-dayDiff(b.date,r.date));return candidates[0]}
 function renderBank(){if(!bankRows.length){$('#bankPreview').innerHTML='';return}$('#bankPreview').innerHTML=bankRows.map((r,i)=>{const m=matchBankRow(r);return `<div class=bankRow><div><b>${r.date}</b> · <strong class="${r.amount<0?'neg':'pos'}">${euro(r.amount)}</strong></div><div>${escapeHtml(r.description)}</div>${m?`<div class=match><span class=badge>Probabile corrispondenza</span><br>${escapeHtml(m.description||m.category)} · ${m.date} · ${euro(amount(m))}</div><button onclick="linkBank(${i},'${m.id}')">Conferma corrispondenza</button>`:`<div class=match><span class=badge>Non registrato</span></div><button onclick="importBank(${i})">Classifica e importa</button>`}</div>`}).join('')}
 window.linkBank=(i,id)=>{const r=bankRows[i],x=tx.find(t=>t.id===id);if(!x)return;x.bankRef={date:r.date,amount:r.amount,description:r.description};x.reconciled=true;persist();bankRows.splice(i,1);renderBank();renderAll()}
-window.importBank=i=>{const r=bankRows[i];resetForm();$('#date').value=r.date;$('#kind').value=r.amount<0?'expense':'income';$('#amount').value=Math.abs(r.amount);$('#payment').value='account';$('#merchantRaw').value=r.description;$('#merchant').value=applyAlias(r.description);$('#description').value=r.description;$('#editId').value='';sessionStorage.setItem('pendingBank',JSON.stringify(r));bankRows.splice(i,1);navTo('add')}
+window.importBank=i=>{const r=bankRows[i];resetForm();$('#date').value=r.date;$('#kind').value=r.amount<0?'expense':'income';$('#splitAccount').value=Math.abs(r.amount);updateSplitTotal();$('#merchantRaw').value=r.description;$('#merchant').value=applyAlias(r.description);$('#description').value=r.description;$('#editId').value='';sessionStorage.setItem('pendingBank',JSON.stringify(r));bankRows.splice(i,1);navTo('add')}
 function exportAllCsv(){csvDownload([['DATA','CATEGORIA','CONTANTI','CONTO','DESCRIZIONE','RAGIONE_SOCIALE_ORIGINALE','ESERCENTE','DIESEL','BENZINA','FONTE','RICONCILIATO','NOTE'],...tx.sort((a,b)=>a.date.localeCompare(b.date)).map(x=>[x.date,x.category,x.cash??'',x.account??'',x.description,x.merchantRaw||'',x.merchant||'',x.diesel??'',x.petrol??'',x.source||'',x.reconciled?'SI':'NO',x.note||''])],`contabilita_${new Date().toISOString().slice(0,10)}.csv`)}
 function exportJson(){const data={version:2,exportedAt:new Date().toISOString(),transactions:tx,aliases,categories:cats};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`contabilita_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
 function setup(){setupSelects();if(!$('#homeMonth').dataset.ready){['homeMonth','anMonth'].forEach(id=>{for(let i=0;i<12;i++)$('#'+id).insertAdjacentHTML('beforeend',`<option value="${String(i+1).padStart(2,'0')}">${months[i]}</option>`);$('#'+id).dataset.ready='1'})}resetForm();renderAll()}
-$$('nav button').forEach(b=>b.onclick=()=>navTo(b.dataset.view));['homeYear','homeMonth','txYear','txCategory','anYear','anMonth','medYear'].forEach(id=>$('#'+id).onchange=renderAll);$('#search').oninput=renderTransactions;$('#txForm').onsubmit=e=>{const pending=sessionStorage.getItem('pendingBank');submitForm(e);if(pending){const r=JSON.parse(pending),last=tx[tx.length-1];if(last){last.source='Banca';last.bankRef={date:r.date,amount:r.amount,description:r.description};last.reconciled=true;persist()}sessionStorage.removeItem('pendingBank');renderAll()}};$('#cancelEdit').onclick=()=>resetForm();$('#payment').onchange=syncPaymentMode;$('#splitCash').oninput=updateSplitTotal;$('#splitAccount').oninput=updateSplitTotal;$('#merchantRaw').onblur=()=>{if(!$('#merchant').value.trim())$('#merchant').value=applyAlias($('#merchantRaw').value.trim())};$('#ocrMerchantRaw').onblur=()=>{$('#ocrMerchant').value=applyAlias($('#ocrMerchantRaw').value.trim())};
+$$('nav button').forEach(b=>b.onclick=()=>navTo(b.dataset.view));['homeYear','homeMonth','txYear','txCategory','anYear','anMonth','medYear'].forEach(id=>$('#'+id).onchange=renderAll);$('#search').oninput=renderTransactions;$('#txForm').onsubmit=submitForm;$('#cancelEdit').onclick=()=>resetForm();$('#splitCash').oninput=updateSplitTotal;$('#splitAccount').oninput=updateSplitTotal;$('#merchantRaw').onblur=()=>{if(!$('#merchant').value.trim())$('#merchant').value=applyAlias($('#merchantRaw').value.trim())};$('#ocrMerchantRaw').onblur=()=>{$('#ocrMerchant').value=applyAlias($('#ocrMerchantRaw').value.trim())};
 $('#exportMedical').onclick=()=>{let a=expenses(selected($('#medYear').value,'')).filter(x=>norm(x.category)==='mediche');csvDownload([['DATA','GENERE','CASH','CONTO C.','MERCEOLOGICO','RAGIONE SOCIALE','ESERCENTE'],...a.map(x=>[x.date,x.category,x.cash??'',x.account??'',x.description,x.merchantRaw||'',x.merchant||''])],`spese_mediche_${$('#medYear').value}.csv`)};
 let imgFile=null,previewUrl=null,cropImage=null,previewCanvas=null;
 // Normalized corner order: TL, TR, BR, BL. All values are in [0,1].
@@ -266,7 +258,7 @@ $('#ocrBtn').onclick=async()=>{
   const parsed=parseOCR(text);fillOcrDraft(parsed);$('#ocrStatus').textContent=parsed.total===null?'Totale non riconosciuto con certezza: inseriscilo manualmente. Nessun dato salvato.':'Lettura terminata: verifica attentamente importo, data ed esercente. Nessun dato salvato.';
  }catch(e){$('#ocrStatus').textContent='OCR non disponibile: '+(e?.message||String(e))}finally{$('#ocrBtn').disabled=false}
 };
-$('#useOcr').onclick=()=>{resetForm();$('#date').value=$('#ocrDate').value||'';$('#amount').value=$('#ocrAmount').value;$('#merchantRaw').value=$('#ocrMerchantRaw').value;$('#merchant').value=$('#ocrMerchant').value;$('#category').value=$('#ocrCategory').value;$('#description').value=$('#ocrDescription').value;navTo('add')};
+$('#useOcr').onclick=()=>{resetForm();$('#date').value=$('#ocrDate').value||'';const raw=$('#ocrAmount').value;ocrReferenceTotal=raw!==''&&Number.isFinite(Number(raw))&&Number(raw)>=0?cents(raw):null;updateSplitTotal();$('#merchantRaw').value=$('#ocrMerchantRaw').value;$('#merchant').value=$('#ocrMerchant').value;$('#category').value=$('#ocrCategory').value;$('#description').value=$('#ocrDescription').value;navTo('add')};
 $('#bankFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const text=await f.text();bankRows=parseBankCsv(text);$('#bankStatus').textContent=bankRows.length?`${bankRows.length} movimenti letti. Controlla le proposte prima di importare.`:'Non sono riuscito a riconoscere i movimenti nel CSV.';renderBank()};
 $('#exportJson').onclick=exportJson;$('#exportCsv').onclick=exportAllCsv;$('#importJson').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.transactions))throw Error('Formato non riconosciuto');if(confirm(`Importare ${d.transactions.length} movimenti sostituendo l'archivio locale attuale?`)){tx=d.transactions;aliases=d.aliases||{};cats=[...new Set([...(d.categories||[]),...tx.map(x=>x.category)])].filter(Boolean).sort();persist();setupSelects();renderAll();alert('Backup importato')}}catch(err){alert('Backup non valido: '+err.message)}};
 let deferredPrompt;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').hidden=false});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null}};setup();
